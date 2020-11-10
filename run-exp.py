@@ -4,6 +4,9 @@ import argparse
 import tensorflow as tf
 from tensorflow import keras
 
+def load_data(dir):
+    pass
+
 def main(args):
     train_dir = args.train_dir
     test_dir = args.test_dir
