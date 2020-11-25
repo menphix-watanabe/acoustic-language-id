@@ -1,6 +1,10 @@
 # acoustic-language-id
 Spoken Language Detection using the Kaggle Spoken Language Identification data set. 
 
+This work is for the final project of the Machine Learning (CSCI E-89 (16392)) course at Harvard Extension School. 
+
+Course link: https://canvas.harvard.edu/courses/79842/assignments/syllabus
+
 ### Steps to run:
 #### Pre-processing the Data
 1. Download the “train” and “test” data sets from  https://www.kaggle.com/toponowicz/spoken-language-identification. This will result in two files: “train.zip” and “test.zip”.
