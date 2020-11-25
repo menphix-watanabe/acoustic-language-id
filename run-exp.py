@@ -3,25 +3,59 @@ import os
 import sys
 import argparse
 import numpy as np
+import logging as log
 import tensorflow as tf
 from tensorflow import keras
 import soundfile as sf
 from tensorflow.keras import models, layers
 
+# Removing all handlers from logging.root
+for handler in log.root.handlers[:]:
+    log.root.removeHandler(handler)
+log.basicConfig(level=log.INFO, format='%(asctime)s %(levelname)-8s %(message)s', datefmt='%a, %d %b %Y %H:%M:%S')
+
 # FEAT_LEN = 431  # for 10 seconds of audio, we get 431 MFCC vectors
 FEAT_DIM = 40  # each MFCC vector is of 40 dimensions
 
 
-def load_train_data(dir, locales, timesteps, limit_per_locale, channel_last=False):
+def load_data_from_file(filepath, timesteps, channel_last=False):
+    print("Loading {0} ... ".format(filepath))
+    data, samplerate = sf.read(filepath)
+    feat = librosa.feature.mfcc(data, sr=samplerate, n_mfcc=FEAT_DIM)
+
+    X = np.zeros([1, timesteps, FEAT_DIM])
+
+    # Limiting both X and feat to have timesteps in length
+    feat = feat.T
+    feat_timesteps = feat.shape[0]
+
+    if feat_timesteps >= timesteps:
+        X[0, :timesteps, :] = feat[:timesteps, :]
+    else:
+        # feat_timesteps < timesteps
+        remainder = timesteps
+        ridx = 0
+        while feat_timesteps <= remainder:
+            X[0, ridx * feat_timesteps:(ridx + 1) * feat_timesteps, :] = feat
+            ridx += 1
+            remainder -= feat_timesteps
+        X[0, ridx * feat_timesteps:, :] = feat[:remainder, :]
+
+    if channel_last:
+        # Expand one dimension in the last axis
+        X = np.expand_dims(X, axis=3)
+
+    return X
+
+
+def load_data_from_dir(dir, locales, timesteps, limit_per_locale, channel_last=False):
     '''
     Load the training data from a directory (FLAC files)
     '''
-    # sample_file = os.path.join(dir, os.listdir(dir)[0])
-    # data, samplerate = sf.read(sample_file)
-    # feat = librosa.feature.mfcc(data, sr=samplerate, n_mfcc=FEAT_DIM)
-    # feat_len = feat.shape[1]
-
-    X = np.zeros([len(locales) * limit_per_locale, timesteps, FEAT_DIM])
+    if channel_last:
+        X = np.zeros([len(locales) * limit_per_locale, timesteps, FEAT_DIM, 1])
+    else:
+        X = np.zeros([len(locales) * limit_per_locale, timesteps, FEAT_DIM])
     Y_onehot = np.zeros([len(locales) * limit_per_locale, len(locales)])
     Y = np.zeros(len(locales) * limit_per_locale)
 
@@ -37,34 +71,13 @@ def load_train_data(dir, locales, timesteps, limit_per_locale, channel_last=Fals
             continue
 
         fpath = os.path.join(dir, f)
-        print("Loading {0} ... ".format(fpath))
-        data, samplerate = sf.read(fpath)
-        feat = librosa.feature.mfcc(data, sr=samplerate, n_mfcc=FEAT_DIM)
-
-        # Limiting both X and feat to have timesteps in length
-        feat = feat.T
-        feat_timesteps = feat.shape[0]
-
-        if feat_timesteps >= timesteps:
-            X[idx, :timesteps, :] = feat[:timesteps, :]
-        else:
-            # feat_timesteps < timesteps
-            remainder = timesteps
-            ridx = 0
-            while feat_timesteps <= remainder:
-                X[idx, ridx * feat_timesteps:(ridx + 1) * feat_timesteps, :] = feat
-                ridx += 1
-                remainder -= feat_timesteps
-            X[idx, ridx * feat_timesteps:, :] = feat[:remainder, :]
+        file_feats = load_data_from_file(fpath, timesteps, channel_last)
+        X[idx] = file_feats
 
         Y_onehot[idx, locales_to_idx[f_locale]] = 1
         Y[idx] = locales_to_idx[f_locale]
         idx += 1
         locales_count[f_locale] += 1
-
-    if channel_last:
-        # Expand one dimension in the last axis
-        X = np.expand_dims(X, axis=3)
 
     return X, Y, Y_onehot, locales_to_idx
 
@@ -113,6 +126,7 @@ def main(args):
     test_dir = args.test_dir
     save_model_dir = args.save_model_dir
     load_model_file = args.load_model
+    test_audio = args.test_audio
     batch_size = 32
     epochs = 5
     timesteps = 512
@@ -133,21 +147,30 @@ def main(args):
     else:
         channel_last = False
 
-    # print(test_X.shape)
-    # print(test_Y.shape)
-    # print(train_Y)
-
-    if load_model_file:
+    if test_audio:
+        if not load_model_file:
+            log.error("Must specify --load-model if --test-audio is specified")
+            return 1
         model = keras.models.load_model(load_model_file)
-        test_X, test_Y, test_Y_onehot, _ = load_train_data(test_dir, locales, timesteps, 180, channel_last=channel_last)
+        file_feats = load_data_from_file(test_audio, timesteps, channel_last)
+        predictions = model.predict_classes(file_feats)
+        print("Predicted language: {0}".format(locales[predictions[0]]))
+    elif load_model_file:
+        if not test_dir:
+            log.error("Must specify --test-dir if --load-model is specified")
+            return 1
+        model = keras.models.load_model(load_model_file)
+        test_X, test_Y, test_Y_onehot, _ = load_data_from_dir(test_dir, locales, timesteps, 180,
+                                                              channel_last=channel_last)
         predictions = model.predict_classes(test_X)
         print(predictions)
         print(test_Y)
         accuracy = eval(predictions, test_Y)
         print("Accuracy: {0:.2f}%".format(100 * accuracy))
     else:
-        train_X, train_Y, train_Y_onehot, locales_to_idx = load_train_data(train_dir, locales, timesteps, num_samples,
-                                                                           channel_last=channel_last)
+        train_X, train_Y, train_Y_onehot, locales_to_idx = load_data_from_dir(train_dir, locales, timesteps,
+                                                                              num_samples,
+                                                                              channel_last=channel_last)
         print(train_X.shape)
         print(train_Y_onehot.shape)
         print(train_Y.shape)
@@ -167,11 +190,13 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train and test the acoustic language-id algorithms.')
-    parser.add_argument('--train-dir', dest='train_dir', action='store', required=True, help='Training directory')
-    parser.add_argument('--test-dir', dest='test_dir', action='store', required=True, help='Testing directory')
+    parser.add_argument('--train-dir', dest='train_dir', action='store', required=False, help='Training directory')
+    parser.add_argument('--test-dir', dest='test_dir', action='store', required=False, help='Testing directory')
     parser.add_argument('--save-model-dir', dest='save_model_dir', action='store', required=False,
                         help='Directory to save model')
     parser.add_argument('--load-model', dest='load_model', action='store', required=False,
                         help='Load the model instead of training it')
+    parser.add_argument('--test-audio', dest='test_audio', action='store', required=False,
+                        help='Test one audio file with the model')
     args = parser.parse_args()
     sys.exit(main(args))
