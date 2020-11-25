@@ -45,8 +45,6 @@ def load_train_data(dir, locales, timesteps, limit_per_locale, channel_last=Fals
         feat = feat.T
         feat_timesteps = feat.shape[0]
 
-        # if feat_timesteps > timesteps:
-        # feat_timesteps = timesteps
         if feat_timesteps >= timesteps:
             X[idx, :timesteps, :] = feat[:timesteps, :]
         else:
@@ -59,10 +57,6 @@ def load_train_data(dir, locales, timesteps, limit_per_locale, channel_last=Fals
                 remainder -= feat_timesteps
             X[idx, ridx * feat_timesteps:, :] = feat[:remainder, :]
 
-            # X[idx, :feat_timesteps, :] = feat.T[:feat_timesteps, :]
-            # remainder = timesteps - feat_timesteps
-            # while remainder > timesteps:
-            #     X[idx, ]
         Y_onehot[idx, locales_to_idx[f_locale]] = 1
         Y[idx] = locales_to_idx[f_locale]
         idx += 1
@@ -170,6 +164,7 @@ def main(args):
             print("Saving model to: {0}".format(model_file))
             model.save(model_file)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train and test the acoustic language-id algorithms.')
     parser.add_argument('--train-dir', dest='train_dir', action='store', required=True, help='Training directory')
@@ -178,18 +173,5 @@ if __name__ == '__main__':
                         help='Directory to save model')
     parser.add_argument('--load-model', dest='load_model', action='store', required=False,
                         help='Load the model instead of training it')
-    # parser.add_argument('--input-layer-dim', dest='input_layer_dim', action='store', type=int, required=True, help='Dimension for the input layer')
-    # parser.add_argument('--hidden-layer-dims', dest='hidden_layer_dims', action='store', type=int, required=True,
-    #                     help='Dimensions for the hidden layer, separated by comma')
-    # parser.add_argument('--time-steps', dest='time_steps', action='store', type=int, required=True,
-    #                     help='Number of time steps for RNN. For CNN it\'s the feature\'s length')
-    # parser.add_argument('--model-type', dest='model_type', action='store', required=True,
-    #                     help='Model type: rnn/cnn')
-    # parser.add_argument('--action', dest='action', action='store', required=True,
-    #                     help='Action: train/test/test-file')
-    # parser.add_argument('--load-model-file', dest='load_model_file', action='store', required=False,
-    #                     help='Load the model from this file')
-    # parser.add_argument('--save-model-file', dest='save_model_file', action='store', required=False,
-    #                     help='Save the model to this file')
     args = parser.parse_args()
     sys.exit(main(args))
