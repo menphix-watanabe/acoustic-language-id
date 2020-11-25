@@ -86,7 +86,6 @@ def create_rnn_model(input_layer_dim, hidden_layer_dims, output_layer_dim):
         model.add(layers.LSTM(layer_dim, return_sequences=return_seq))
         model.add(layers.Dropout(0.2))
     model.add(layers.Dense(output_layer_dim, activation='softmax'))
-    # model.add(layers.Softmax(num_outputs))
     return model
 
 
@@ -119,6 +118,7 @@ def main(args):
     train_dir = args.train_dir
     test_dir = args.test_dir
     save_model_dir = args.save_model_dir
+    load_model_file = args.load_model
     batch_size = 32
     epochs = 5
     timesteps = 512
@@ -133,42 +133,42 @@ def main(args):
     print("Test dir: {0}".format(test_dir))
     locales = ['en', 'de', 'es']
 
-    # model = create_rnn_model(input_layer_dim, hidden_layer_dims, output_layer_dim)
-    model = create_cnn_model(output_layer_dim)
-
     # train_X shape: [batch, timesteps, feature_dim]
     if model_type == 'cnn':
         channel_last = True
     else:
         channel_last = False
-    train_X, train_Y, train_Y_onehot, locales_to_idx = load_train_data(train_dir, locales, timesteps, num_samples,
-                                                                       channel_last=channel_last)
 
-    print(train_X.shape)
-    print(train_Y_onehot.shape)
-    print(train_Y.shape)
     # print(test_X.shape)
     # print(test_Y.shape)
     # print(train_Y)
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    history = model.fit(train_X, train_Y_onehot, batch_size=batch_size, epochs=epochs)
-    print(history)
 
-    test_X, test_Y, test_Y_onehot, _ = load_train_data(test_dir, locales, timesteps, 180, channel_last=channel_last)
+    if load_model_file:
+        model = keras.models.load_model(load_model_file)
+        test_X, test_Y, test_Y_onehot, _ = load_train_data(test_dir, locales, timesteps, 180, channel_last=channel_last)
+        predictions = model.predict_classes(test_X)
+        print(predictions)
+        print(test_Y)
+        accuracy = eval(predictions, test_Y)
+        print("Accuracy: {0:.2f}%".format(100 * accuracy))
+    else:
+        train_X, train_Y, train_Y_onehot, locales_to_idx = load_train_data(train_dir, locales, timesteps, num_samples,
+                                                                           channel_last=channel_last)
+        print(train_X.shape)
+        print(train_Y_onehot.shape)
+        print(train_Y.shape)
+        # model = create_rnn_model(input_layer_dim, hidden_layer_dims, output_layer_dim)
+        model = create_cnn_model(output_layer_dim)
+        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        history = model.fit(train_X, train_Y_onehot, batch_size=batch_size, epochs=epochs)
+        print(history)
 
-    if save_model_dir:
-        model_file = os.path.join(save_model_dir,
-                                  get_model_name(model_type, input_layer_dim, hidden_layer_dims, output_layer_dim,
-                                                 num_samples, timesteps, epochs))
-        print("Saving model to: {0}".format(model_file))
-        model.save(model_file)
-
-    predictions = model.predict_classes(test_X)
-    print(predictions)
-    print(test_Y)
-    accuracy = eval(predictions, test_Y)
-    print("Accuracy: {0:.2f}%".format(100 * accuracy))
-
+        if save_model_dir:
+            model_file = os.path.join(save_model_dir,
+                                      get_model_name(model_type, input_layer_dim, hidden_layer_dims, output_layer_dim,
+                                                     num_samples, timesteps, epochs))
+            print("Saving model to: {0}".format(model_file))
+            model.save(model_file)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train and test the acoustic language-id algorithms.')
@@ -176,7 +176,20 @@ if __name__ == '__main__':
     parser.add_argument('--test-dir', dest='test_dir', action='store', required=True, help='Testing directory')
     parser.add_argument('--save-model-dir', dest='save_model_dir', action='store', required=False,
                         help='Directory to save model')
-    # parser.add_argument('--save-feats', dest='save-feats', action='store', required=False, help='Saves the features')
-    # parser.add_argument('--save-feats', dest='save-feats', action='store', required=False, help='Saves the features')
+    parser.add_argument('--load-model', dest='load_model', action='store', required=False,
+                        help='Load the model instead of training it')
+    # parser.add_argument('--input-layer-dim', dest='input_layer_dim', action='store', type=int, required=True, help='Dimension for the input layer')
+    # parser.add_argument('--hidden-layer-dims', dest='hidden_layer_dims', action='store', type=int, required=True,
+    #                     help='Dimensions for the hidden layer, separated by comma')
+    # parser.add_argument('--time-steps', dest='time_steps', action='store', type=int, required=True,
+    #                     help='Number of time steps for RNN. For CNN it\'s the feature\'s length')
+    # parser.add_argument('--model-type', dest='model_type', action='store', required=True,
+    #                     help='Model type: rnn/cnn')
+    # parser.add_argument('--action', dest='action', action='store', required=True,
+    #                     help='Action: train/test/test-file')
+    # parser.add_argument('--load-model-file', dest='load_model_file', action='store', required=False,
+    #                     help='Load the model from this file')
+    # parser.add_argument('--save-model-file', dest='save_model_file', action='store', required=False,
+    #                     help='Save the model to this file')
     args = parser.parse_args()
     sys.exit(main(args))
