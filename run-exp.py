@@ -52,12 +52,16 @@ def load_data_from_dir(dir, locales, timesteps, limit_per_locale, channel_last=F
     '''
     Load the training data from a directory (FLAC files)
     '''
+
+    num_audio = min(len(os.listdir(dir)), len(locales) * limit_per_locale)
+
     if channel_last:
-        X = np.zeros([len(locales) * limit_per_locale, timesteps, FEAT_DIM, 1])
+        X = np.zeros([num_audio, timesteps, FEAT_DIM, 1])
     else:
-        X = np.zeros([len(locales) * limit_per_locale, timesteps, FEAT_DIM])
-    Y_onehot = np.zeros([len(locales) * limit_per_locale, len(locales)])
-    Y = np.zeros(len(locales) * limit_per_locale)
+        X = np.zeros([num_audio, timesteps, FEAT_DIM])
+
+    Y_onehot = np.zeros([num_audio, len(locales)])
+    Y = np.zeros(num_audio)
 
     locales_count = {x: 0 for x in locales}
     locales_to_idx = dict()
@@ -140,6 +144,10 @@ def main(args):
     print("Train dir: {0}".format(train_dir))
     print("Test dir: {0}".format(test_dir))
     locales = ['en', 'de', 'es']
+
+    if not train_dir and not test_dir and not load_model_file and not test_audio:
+        log.error("Must specify --train-dir or --test-dir or --load-model")
+        return 1
 
     # train_X shape: [batch, timesteps, feature_dim]
     if model_type == 'cnn':
